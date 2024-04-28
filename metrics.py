@@ -12,7 +12,7 @@ from pesq import pesq
 import numpy as np
 import parselmouth
 from torchmetrics import PearsonCorrCoef
-
+from nnAudio import features as nnAudioFeatures
 
 class PESQ(nn.Module):
     def __init__(self, band_type: str = "wb"):
@@ -450,16 +450,20 @@ def get_metrics(signal, recons):
             recons = AudioSignal(recons)
 
         x = signal
-        y = recons.clone().resample(x.sample_rate)
+        if signal.sample_rate!=recons.sample_rate:
+            y = recons.clone().resample(x.sample_rate)
+        else:
+            y = recons
 
         metrics = {}
         metric_functions = {
-            "mel": lambda: mel_loss(x, y).cpu().item(),
-            "stft": lambda: stft_loss(x, y).cpu().item(),
-            "waveform": lambda: waveform_loss(x, y).cpu().item(),
-            "pesq": lambda: pesqfn(x, y),
-            "stoi": lambda: stoifn(x, y, x.sample_rate),
-            "f0corr": lambda: f0corr(x, y),
+            # "mel": lambda: mel_loss(x, y).cpu().item(),
+            # "stft": lambda: stft_loss(x, y).cpu().item(),
+            # "waveform": lambda: waveform_loss(x, y).cpu().item(),
+            # "pesq": lambda: pesqfn(x, y),
+            # "stoi": lambda: stoifn(x, y, x.sample_rate),
+            # "f0corr": lambda: f0corr(x, y),
+            "cqt": lambda: cqt(x, y)
         }
 
         for metric_name, metric_func in metric_functions.items():
@@ -622,6 +626,28 @@ class F0CorrLoss(torch.nn.Module):
         f0_deg = torch.from_numpy(f0_deg).float()
         return self.pearson(f0_ref, f0_deg)
 
+class CQTLoss(torch.nn.Module):
+    def __init__(self, n_bins=84, sr=32000, freq=50):
+        super().__init__()
+        self.epsilon=1e-10
+        # Getting Mel Spectrogram on the fly
+        self.spec_layer = nnAudioFeatures.cqt.CQT(sr=sr, hop_length=sr//freq, fmin=32.7, 
+                                           fmax=None, n_bins=n_bins, bins_per_octave=n_bins//7, 
+                                           filter_scale=1, norm=1, window='hann', center=True, 
+                                           pad_mode='constant', trainable=False, 
+                                           output_format='Magnitude', verbose=True)
+        self.criterion = torch.nn.MSELoss()
+
+    def forward(self, x, y):
+        '''
+        take input from transformer hidden states: [batch, len_seq, channel]
+        output: [batch, len_seq, n_bins]
+        '''
+        x = x.audio_data[0]
+        y = y.audio_data[0]
+        cqt_target = torch.transpose(self.spec_layer(x), -1, -2)
+        cqt_preds = torch.transpose(self.spec_layer(y), -1, -2)
+        return self.criterion(cqt_target, cqt_preds)
 
 waveform_loss = L1Loss()
 stft_loss = MultiScaleSTFTLoss()
@@ -631,3 +657,4 @@ snr_loss = SignalToNoiseRatioLoss()
 pesqfn = PESQ()
 stoifn = STOI()
 f0corr = F0CorrLoss()
+cqt = CQTLoss()

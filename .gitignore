@@ -12,3 +12,8 @@
 !/SoundCodec/test/sample10_16k.wav
 
 __pycache__/
+
+./*./json
+cached_datasets/*
+audio-2m-valid/*
+datasets/*

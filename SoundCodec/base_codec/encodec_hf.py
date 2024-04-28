@@ -12,7 +12,7 @@ class BaseCodec:
         self.sampling_rate = self.processor.sampling_rate
 
     def config(self):
-        self.pretrained_model_name = "facebook/encodec_24khz"
+        self.pretrained_model_name = "facebook/encodec_32khz"
 
     @torch.no_grad()
     def synth(self, data, local_save=True):
@@ -44,4 +44,4 @@ class BaseCodec:
         encoder_outputs, padding_mask = stuff_for_synth
         audio_values = \
             self.model.decode(encoder_outputs.audio_codes, encoder_outputs.audio_scales, padding_mask)[0]
-        return audio_values[0].cpu().numpy()
+        return audio_values[0].cpu()

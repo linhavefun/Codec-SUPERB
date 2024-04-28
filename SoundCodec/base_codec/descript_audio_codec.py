@@ -28,6 +28,7 @@ class BaseCodec:
         extracted_unit = self.extract_unit(data)
         compressed_audio, unit_only = extracted_unit.stuff_for_synth
         data['unit'] = extracted_unit.unit
+        import pdb;pdb.set_trace()
         decompressed_audio = self.model.decompress(compressed_audio).audio_data.squeeze(0)
         if local_save:
             audio_path = f"dummy-descript-audio-codec-{self.model_type}/{data['id']}.wav"
@@ -49,6 +50,7 @@ class BaseCodec:
 
     @torch.no_grad()
     def decode_unit(self, stuff_for_synth):
-        compressed_audio, unit_only = stuff_for_synth
+        compressed_audio = stuff_for_synth
+        import pdb;pdb.set_trace()
         decompressed_audio = self.model.decompress(compressed_audio).audio_data.squeeze(0)
         return decompressed_audio.cpu().numpy()

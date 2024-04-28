@@ -1,8 +1,8 @@
 import argparse
 from datasets import DatasetDict, Audio, load_from_disk
 from SoundCodec.codec import load_codec, list_codec
-from SoundCodec.dataset import load_dataset, apply_audio_cast
-from SoundCodec.dataset.general import extract_unit
+from SoundCodec.dataset import load_dataset
+from SoundCodec.dataset.general import extract_unit, apply_audio_cast
 
 
 def run_experiment(dataset_name):
@@ -12,14 +12,14 @@ def run_experiment(dataset_name):
     cleaned_dataset = load_dataset(dataset_name)
     print("before filter duration", cleaned_dataset)
     cleaned_dataset = cleaned_dataset.filter(
-        lambda x: len(x['audio']['array']) / x['audio']['sampling_rate'] <= args.max_duration)
+        lambda x: x['duration'] <= args.max_duration, num_proc=16)
     print("after filter duration", cleaned_dataset)
-    cleaned_dataset = apply_audio_cast(cleaned_dataset, sampling_rate)
+    # cleaned_dataset = apply_audio_cast(cleaned_dataset, sampling_rate)
     if not args.extract_unit_only:
         datasets_dict = DatasetDict({'original': cleaned_dataset})
     else:
         datasets_dict = DatasetDict({})
-    for codec_name in list_codec():
+    for codec_name in ['encodec_32k', 'encodec_32k_retrain']:
         print(f"Synthesizing dataset with {codec_name}")
         # load from disk if already synthesized
         try:

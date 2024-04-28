@@ -13,7 +13,9 @@ from SoundCodec.base_codec.general import pad_arrays_to_match
 from metrics import get_metrics
 import psutil
 from tqdm.contrib.concurrent import process_map
+from tqdm import tqdm
 
+gc.enable()
 
 def default_converter(o):
     if isinstance(o, np.float32):
@@ -28,6 +30,7 @@ def compute_metrics(original, model, max_duration):
     if original_signal.duration > max_duration:
         return None
     model_signal = AudioSignal(resynth_array, sampling_rate)
+    print(original_signal.duration)
     metrics = get_metrics(original_signal, model_signal)
     return metrics
 
@@ -47,6 +50,7 @@ def evaluate_dataset(dataset_name, is_stream, specific_models=None, max_duration
 
     if os.path.exists(dataset_name):
         c = load_from_disk(dataset_name)
+        c = c.filter(lambda x: x['duration']<=max_duration, num_proc=16)
     else:
         c = load_dataset(dataset_name, streaming=is_stream)
     models = [key for key in c.keys() if key != "original"]
@@ -60,9 +64,15 @@ def evaluate_dataset(dataset_name, is_stream, specific_models=None, max_duration
 
         # Process Dataset with Multi-Processing
         args_list = [(original_iter, model_iter, max_duration) for original_iter, model_iter in
-                     zip(c['original'], c[model])]
-        metrics_results = process_map(process_entry, args_list, max_workers=max_workers, chunksize=chunksize)
+                     tqdm(zip(c['original'], c[model]), total=len(c['original']), desc='loading audio arrays')]
+        # metrics_results = process_map(process_entry, args_list, max_workers=max_workers, chunksize=chunksize)
+        metrics_results = []
+        for a in args_list:
+            original_iter, model_iter, max_duration = a
+            metrics = compute_metrics(original_iter, model_iter, max_duration)
+            metrics_results.append(metrics)
         metrics_results = [metrics for metrics in metrics_results if metrics is not None]
+        print(f'metric results: {len(metrics_results)}')
         # Process Dataset END
 
         # Aggregate the metrics
@@ -101,7 +111,7 @@ def evaluate_dataset(dataset_name, is_stream, specific_models=None, max_duration
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Evaluate audio datasets.')
-    parser.add_argument('--dataset', type=str, default="AudioDecBenchmark/librispeech_asr_dummy_synth",
+    parser.add_argument('--dataset', type=str, default="Codec-SUPERB/librispeech_asr_dummy_synth",
                         help='Name of the dataset to evaluate')
     parser.add_argument('--streaming', action='store_true', help='Evaluate in streaming mode')
     parser.add_argument('--batch', type=int, default=100,
